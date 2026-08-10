@@ -535,7 +535,6 @@ std::pair<void *, void *> CreateDualMapping(int fd) {
         mmap(nullptr, reserved_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
     if (reserved == MAP_FAILED) [[unlikely]] {
         PLOGE("mmap reserved memory");
-        close(fd);
         return {};
     }
 
@@ -546,11 +545,8 @@ std::pair<void *, void *> CreateDualMapping(int fd) {
     if (executable_memory == MAP_FAILED || writable_memory == MAP_FAILED) [[unlikely]] {
         PLOGE("mmap dual mapping");
         munmap(reserved, reserved_size);
-        close(fd);
         return {};
     }
-
-    close(fd);
 
     dual_regions.emplace(reserved);
     return {executable_memory, writable_memory};
@@ -569,6 +565,7 @@ void *AllocateMemoryFromMemfd() {
     }
 
     auto [executable_memory, writable_memory] = CreateDualMapping(memfd);
+    close(memfd);
     if (!executable_memory || !writable_memory) [[unlikely]] {
         return nullptr;
     }
@@ -590,6 +587,7 @@ void *AllocateMemoryFromAshmem() {
     }
 
     auto [executable_memory, writable_memory] = CreateDualMapping(ashmem);
+    close(ashmem);
     if (!executable_memory || !writable_memory) [[unlikely]] {
         return nullptr;
     }
@@ -802,6 +800,7 @@ using ::lsplant::IsHooked;
 [[maybe_unused]] bool Init(JNIEnv *env, const InitInfo &info) {
     if (!info.inline_hooker || !info.inline_unhooker || !info.art_symbol_resolver ||
         !info.art_symbol_prefix_resolver) {
+        LOGE("Invalid init info");
         return false;
     }
     bool static kInit = InitConfig(info) && InitJNI(env) && InitNative(env, info);
